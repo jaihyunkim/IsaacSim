@@ -64,7 +64,7 @@ IsaacSim/
 
 ---
 
-## Quick Start (any lab member, any server)
+## Quick Start 
 
 1. **Clone & enter**:
    ```bash
