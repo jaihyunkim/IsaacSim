@@ -12,27 +12,22 @@ services:
       - NVIDIA_VISIBLE_DEVICES=all
       - ACCEPT_EULA=Y
       - PRIVACY_CONSENT=Y
-      - RUN_ID=${RUN_ID}          # set at runtime; see commands below
+      - RUN_ID=${RUN_ID:-dev_run}
       - START_MODE=${START_MODE:-handshake}
       - ZMQ_PUB=tcp://0.0.0.0:5556
       - ZMQ_REP=tcp://0.0.0.0:5557
       - ZMQ_PUB_FPS=${ZMQ_PUB_FPS:-2}
       - RENDERER=${RENDERER:-Rasterizing}
     ports:
-      - "5556:5556"   # camera PUB
-      - "5557:5557"   # control REP
+      - "${PUB_PORT:-5556}:5556"
+      - "${REP_PORT:-5557}:5557"
     volumes:
-      # Per-user named volumes so folks don't collide
-      - isaac_ws_${USER}:/workspace_ws
-      - isaac_out_${USER}:/out
-      # Live-mount code for dev (no image rebuild for Python edits)
-      - ../sim:/workspace/sim:ro
-    command:
-      - >
-        PYSH=$( [ -x /isaac-sim/python.sh ] && echo /isaac-sim/python.sh || echo /isaac-sim/kit/python.sh );
-        export OUTPUT_DIR=/out/${RUN_ID:-dev_run};
-        "$$PYSH" /workspace/sim/client_yaml_rt.py /workspace/sim/configs/warehouse.yaml
+      - isaac_ws:/workspace_ws
+      - isaac_out:/out
+    # Uses Dockerfile CMD; no command override needed
 
 volumes:
-  isaac_ws_${USER}:
-  isaac_out_${USER}:
+  isaac_ws:
+    name: isaac_ws_${USER}     # dynamic actual name, static key
+  isaac_out:
+    name: isaac_out_${USER}
