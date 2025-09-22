@@ -1,0 +1,25 @@
+FROM nvcr.io/nvidia/isaac-sim:4.5.0
+
+# Install Python deps for ZMQ + JPEG on Kit's interpreter
+RUN --mount=type=cache,target=/root/.cache/pip \
+    bash -lc 'PYSH=$( [ -x /isaac-sim/python.sh ] && echo /isaac-sim/python.sh || echo /isaac-sim/kit/python.sh ); \
+              "$PYSH" -m pip install --no-cache-dir pyzmq==25.1.2 Pillow==10.4.0'
+
+WORKDIR /workspace
+# App code will be bind-mounted in dev; we still copy as a fallback
+COPY sim/ ./sim/
+
+# Sensible defaults (override via compose or .env)
+ENV ACCEPT_EULA=Y \
+    PRIVACY_CONSENT=Y \
+    START_MODE=handshake \
+    ZMQ_PUB=tcp://0.0.0.0:5556 \
+    ZMQ_REP=tcp://0.0.0.0:5557 \
+    ZMQ_PUB_FPS=2 \
+    RENDERER=Rasterizing
+
+ENTRYPOINT ["/bin/bash","-lc"]
+# Default command: run our client against the sample config
+CMD ['PYSH=$( [ -x /isaac-sim/python.sh ] && echo /isaac-sim/python.sh || echo /isaac-sim/kit/python.sh ); \
+      export OUTPUT_DIR=/out/${RUN_ID:-dev_run}; \
+      "$PYSH" /workspace/sim/client_yaml_rt.py /workspace/sim/configs/warehouse.yaml']

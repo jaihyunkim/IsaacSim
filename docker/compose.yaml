@@ -1,0 +1,38 @@
+version: "3.9"
+
+services:
+  sim:
+    build:
+      context: ..
+      dockerfile: docker/Dockerfile.sim
+    image: isaacsim-zmq:local
+    runtime: nvidia
+    shm_size: "2gb"
+    environment:
+      - NVIDIA_VISIBLE_DEVICES=all
+      - ACCEPT_EULA=Y
+      - PRIVACY_CONSENT=Y
+      - RUN_ID=${RUN_ID}          # set at runtime; see commands below
+      - START_MODE=${START_MODE:-handshake}
+      - ZMQ_PUB=tcp://0.0.0.0:5556
+      - ZMQ_REP=tcp://0.0.0.0:5557
+      - ZMQ_PUB_FPS=${ZMQ_PUB_FPS:-2}
+      - RENDERER=${RENDERER:-Rasterizing}
+    ports:
+      - "5556:5556"   # camera PUB
+      - "5557:5557"   # control REP
+    volumes:
+      # Per-user named volumes so folks don't collide
+      - isaac_ws_${USER}:/workspace_ws
+      - isaac_out_${USER}:/out
+      # Live-mount code for dev (no image rebuild for Python edits)
+      - ../sim:/workspace/sim:ro
+    command:
+      - >
+        PYSH=$( [ -x /isaac-sim/python.sh ] && echo /isaac-sim/python.sh || echo /isaac-sim/kit/python.sh );
+        export OUTPUT_DIR=/out/${RUN_ID:-dev_run};
+        "$$PYSH" /workspace/sim/client_yaml_rt.py /workspace/sim/configs/warehouse.yaml
+
+volumes:
+  isaac_ws_${USER}:
+  isaac_out_${USER}:

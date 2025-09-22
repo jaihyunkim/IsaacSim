@@ -1,0 +1,25 @@
+renderer: ${RENDERER}
+output_dir: /out/dev_run     # overridden by OUTPUT_DIR env at runtime
+duration_s: 30
+enable_writers: true
+
+env_usd: /Isaac/Environments/Simple_Warehouse/warehouse.usd
+env_prim_path: /World/Environment
+
+dome_intensity: 0
+sun_intensity: 4000
+rect_intensity: 6000
+
+robots:
+  - robot_id: carter1
+    usd_path: /Isaac/Robots/Carter/carter_v1.usd
+    prim_path: /World/CarterV1
+    pose_xyz_yaw: [0.0, 0.0, 0.0, 0.0]
+    enable_contacts: true
+
+cameras:
+  - camera_id: cam_main
+    position: [6.0, 0.0, 2.0]
+    look_at: [0.0, 0.0, 0.5]
+    res: [640, 480]
+    writer: true
