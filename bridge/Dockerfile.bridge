@@ -1,0 +1,16 @@
+# Build
+FROM rust:1.77-bullseye AS build
+RUN apt-get update && apt-get install -y --no-install-recommends libzmq3-dev pkg-config && rm -rf /var/lib/apt/lists/*
+WORKDIR /app
+COPY bridge/Cargo.toml bridge/Cargo.lock* ./
+RUN mkdir -p src && echo 'fn main(){}' > src/main.rs
+RUN cargo build --release
+COPY bridge/src ./src
+RUN cargo build --release
+
+# Runtime
+FROM debian:bookworm-slim
+RUN apt-get update && apt-get install -y --no-install-recommends libzmq5 ca-certificates && rm -rf /var/lib/apt/lists/*
+COPY --from=build /app/target/release/isaacsim_bridge /usr/local/bin/isaacsim_bridge
+ENV RUST_BACKTRACE=1
+ENTRYPOINT ["/usr/local/bin/isaacsim_bridge"]

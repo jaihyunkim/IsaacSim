@@ -1,0 +1,17 @@
+[package]
+name = "isaacsim_bridge"
+version = "0.1.0"
+edition = "2021"
+
+[features]
+# We'll add 'with_comm' later to use the lab's communication crate
+with_comm = []
+
+[dependencies]
+anyhow = "1"
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+zmq = "0.10"
+
+# When you have access to the private repo, we'll enable this behind 'with_comm':
+# communication = { git = "ssh://git@github.com:22/robotic-inversion/communication.git", optional = true }
