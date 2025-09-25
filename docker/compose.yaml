@@ -24,32 +24,10 @@ services:
     volumes:
       - isaac_ws:/workspace_ws
       - isaac_out:/out
-    # Uses Dockerfile CMD; no command override needed
-  bridge:
-    build:
-      context: ..
-      dockerfile: bridge/Dockerfile.bridge
-    image: isaacsim-bridge:local
-    depends_on:
-      - sim
-    environment:
-      # Inside the Compose network, the sim is reachable as 'sim:5556/5557'
-      - SIM_PUB=tcp://sim:5556
-      - SIM_REP=tcp://sim:5557
-      # Public (host-mapped) ports for others to consume
-      - OUT_PUB=tcp://0.0.0.0:6000
-      - IN_CMD=tcp://0.0.0.0:6001
-      # Topics on the public side
-      - TOPIC_CAMERA=sim/camera/jpeg
-      - TOPIC_CMD=sim/cmd
-      - TOPIC_ACK=sim/cmd_ack
-    ports:
-      - "${BRIDGE_PUB_PORT:-6000}:6000"
-      - "${BRIDGE_CMD_PORT:-6001}:6001"
-
 
 volumes:
   isaac_ws:
-    name: isaac_ws_${USER}     # dynamic actual name, static key
+    # static key; dynamic actual name
+    name: "isaac_ws_${USER:-unknown}"
   isaac_out:
-    name: isaac_out_${USER}
+    name: "isaac_out_${USER:-unknown}"
