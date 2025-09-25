@@ -6,7 +6,6 @@ services:
       context: ..
       dockerfile: docker/Dockerfile.sim
     image: isaacsim-zmq:local
-    runtime: nvidia
     shm_size: "2gb"
     environment:
       - NVIDIA_VISIBLE_DEVICES=all
@@ -29,3 +28,8 @@ services:
       - type: bind
         source: /home/${USER}/isaac_out
         target: /out
+    device_requests:
+      - driver: nvidia
+        count: all
+        capabilities: [gpu]
+
