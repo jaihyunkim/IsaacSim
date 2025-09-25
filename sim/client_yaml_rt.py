@@ -16,12 +16,79 @@ def build_from_cfg(sim: Simulation, cfg: SimulationConfig):
     for c in cfg.cameras:
         sim.add_camera(c.camera_id, c.position, c.look_at, c.res, c.writer)
 
+def omni_stat(url: str):
+    try:
+        import omni.client
+        res, _ = omni.client.stat(url)
+        return res == omni.client.Result.OK
+    except Exception:
+        return False
+
+def resolve_env_candidate():
+    """Try a few richer warehouse variants; fall back to simple warehouse."""
+    from isaacsim.storage.native import get_assets_root_path
+    root = (get_assets_root_path() or "").rstrip("/")
+    candidates = [
+        "/Isaac/Environments/Warehouse/warehouse.usd",
+        "/Isaac/Environments/Warehouse_Shelves/warehouse_shelves.usd",
+        "/Isaac/Environments/Simple_Warehouse/warehouse_with_shelves.usd",
+        "/Isaac/Environments/Simple_Warehouse/warehouse.usd",  # fallback
+    ]
+    for rel in candidates:
+        url = (root + rel) if (root and rel.startswith("/")) else rel
+        if omni_stat(url):
+            print(f"[client] env asset OK: {url}")
+            return url
+        else:
+            print(f"[client] env not found: {url}")
+    return None
+
+def resolve_forklift_candidate():
+    """Try a few likely forklift USDs; return first that exists, else None."""
+    from isaacsim.storage.native import get_assets_root_path
+    root = (get_assets_root_path() or "").rstrip("/")
+    candidates = [
+        "/Isaac/Robots/Forklift/forklift.usd",
+        "/Isaac/Props/Industrial/Forklift/forklift.usd",
+        "/Isaac/Environments/Warehouse/Robots/forklift.usd",
+    ]
+    for rel in candidates:
+        url = (root + rel) if (root and rel.startswith("/")) else rel
+        if omni_stat(url):
+            print(f"[client] forklift asset OK: {url}")
+            return url
+        else:
+            print(f"[client] forklift not found: {url}")
+    return None
+
+
+
 def main():
     if len(sys.argv) < 2:
         print("Usage: client_yaml_rt.py /workspace/configs/scene.yaml")
         sys.exit(2)
     cfg = SimulationConfig.from_file(sys.argv[1])
     sim = Simulation(cfg)
+
+    # --- environment ---
+    env_url = cfg.env_usd or resolve_env_candidate()
+    if env_url:
+        sim.set_environment(env_url, prim_path=cfg.env_prim_path)
+    else:
+        print("[client] WARNING: could not resolve a warehouse USD; continuing with empty world")
+
+    # --- forklift robot (optional) ---
+    fk_url = resolve_forklift_candidate()
+    if fk_url:
+        cx, cy = float(sim.scene_center[0]), float(sim.scene_center[1])
+        # put it on an aisle; tweak as needed
+        fk_xyz_yaw = (cx - 2.0, cy - 1.0, 0.15, 0.0)
+        sim.add_robot("fork1", fk_url, "/World/Robots/Forklift1", xyz_yaw=fk_xyz_yaw, enable_contacts=True)
+        # give it a gentle forward roll so it moves in the clip
+        sim.set_cmd("fork1", lin_vel=0.4, ang_vel=0.0, timestamp=sim.t_sim)
+    else:
+        print("[client] NOTE: forklift not found; running environment-only video.")
+
     try:
         build_from_cfg(sim, cfg)
 

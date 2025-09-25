@@ -1,0 +1,35 @@
+# Safer renderer for headless video; switch to RayTracedLighting later if you like
+renderer: Rasterizing
+output_dir: /out/dev_run         # overridden by OUTPUT_DIR env at runtime
+duration_s: 8
+enable_writers: true
+
+# Environment: we'll auto-resolve in the client; this is just a hint for logs
+env_usd: /Isaac/Environments/Simple_Warehouse/warehouse.usd
+env_prim_path: /World/Environment
+
+# Lights (fine defaults)
+dome_intensity: 0
+sun_intensity: 4000
+rect_intensity: 6000
+
+# No programmatic obstacle here
+test_obstacle: false
+obstacle_wall: false
+
+# Robots: leave empty; the client will try to add a forklift if found
+robots: []
+
+# Cameras: one or two good angles; tweak as you like
+cameras:
+  - camera_id: cam_main
+    position: [10.0, -6.0, 3.0]
+    look_at: [0.0,  0.0, 1.0]
+    res: [1280, 720]
+    writer: true
+
+  - camera_id: cam_back
+    position: [-12.0,  4.0, 4.0]
+    look_at: [  0.0,  0.0, 1.2]
+    res: [1280, 720]
+    writer: true
