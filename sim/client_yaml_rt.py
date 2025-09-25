@@ -24,42 +24,141 @@ def omni_stat(url: str):
     except Exception:
         return False
 
+def _asset_roots():
+    """Return a list of candidate root prefixes to try for USDs."""
+    roots = []
+    try:
+        from isaacsim.storage.native import get_assets_root_path
+        r = (get_assets_root_path() or "").rstrip("/")
+        if r:
+            roots.append(r)
+    except Exception:
+        pass
+    # Common local Nucleus prefixes (adjust for your lab if needed)
+    roots += [
+        "omniverse://localhost/NVIDIA/Assets/Isaac/4.5",
+        "omniverse://localhost/NVIDIA/Assets/Isaac",
+        "omniverse://127.0.0.1/NVIDIA/Assets/Isaac/4.5",
+        "",  # allow absolute /Isaac/... to pass through
+    ]
+    # Dedup while preserving order
+    out = []
+    seen = set()
+    for x in roots:
+        if x not in seen and x is not None:
+            seen.add(x); out.append(x)
+    return out
+
+def _probe(rel_or_abs):
+    """Try to stat the asset across candidate roots; return the first URL that exists, else None."""
+    try:
+        import omni.client
+    except Exception:
+        return None
+    for root in _asset_roots():
+        url = rel_or_abs if rel_or_abs.startswith(("omniverse://","/Isaac/")) or not root else (root.rstrip("/") + rel_or_abs)
+        try:
+            res, _ = omni.client.stat(url)
+            if res == omni.client.Result.OK:
+                print(f"[client] asset OK: {url}")
+                return url
+            else:
+                print(f"[client] not found: {url}")
+        except Exception as e:
+            print(f"[client] stat failed for {url}: {e}")
+    return None
+
 def resolve_env_candidate():
-    """Try a few richer warehouse variants; fall back to simple warehouse."""
-    from isaacsim.storage.native import get_assets_root_path
-    root = (get_assets_root_path() or "").rstrip("/")
+    # Try richer warehouses first, then the simple one
     candidates = [
         "/Isaac/Environments/Warehouse/warehouse.usd",
         "/Isaac/Environments/Warehouse_Shelves/warehouse_shelves.usd",
         "/Isaac/Environments/Simple_Warehouse/warehouse_with_shelves.usd",
-        "/Isaac/Environments/Simple_Warehouse/warehouse.usd",  # fallback
+        "/Isaac/Environments/Simple_Warehouse/warehouse.usd",
     ]
     for rel in candidates:
-        url = (root + rel) if (root and rel.startswith("/")) else rel
-        if omni_stat(url):
-            print(f"[client] env asset OK: {url}")
-            return url
-        else:
-            print(f"[client] env not found: {url}")
+        hit = _probe(rel)
+        if hit: return hit
+    return None
+
+def _asset_roots():
+    """Return a list of candidate root prefixes to try for USDs."""
+    roots = []
+    try:
+        from isaacsim.storage.native import get_assets_root_path
+        r = (get_assets_root_path() or "").rstrip("/")
+        if r:
+            roots.append(r)
+    except Exception:
+        pass
+    # Common local Nucleus prefixes (adjust for your lab if needed)
+    roots += [
+        "omniverse://localhost/NVIDIA/Assets/Isaac/4.5",
+        "omniverse://localhost/NVIDIA/Assets/Isaac",
+        "omniverse://127.0.0.1/NVIDIA/Assets/Isaac/4.5",
+        "",  # allow absolute /Isaac/... to pass through
+    ]
+    # Dedup while preserving order
+    out = []
+    seen = set()
+    for x in roots:
+        if x not in seen and x is not None:
+            seen.add(x); out.append(x)
+    return out
+
+def _probe(rel_or_abs):
+    """Try to stat the asset across candidate roots; return the first URL that exists, else None."""
+    try:
+        import omni.client
+    except Exception:
+        return None
+    for root in _asset_roots():
+        url = rel_or_abs if rel_or_abs.startswith(("omniverse://","/Isaac/")) or not root else (root.rstrip("/") + rel_or_abs)
+        try:
+            res, _ = omni.client.stat(url)
+            if res == omni.client.Result.OK:
+                print(f"[client] asset OK: {url}")
+                return url
+            else:
+                print(f"[client] not found: {url}")
+        except Exception as e:
+            print(f"[client] stat failed for {url}: {e}")
+    return None
+
+def resolve_env_candidate():
+    # Try richer warehouses first, then the simple one
+    candidates = [
+        "/Isaac/Environments/Warehouse/warehouse.usd",
+        "/Isaac/Environments/Warehouse_Shelves/warehouse_shelves.usd",
+        "/Isaac/Environments/Simple_Warehouse/warehouse_with_shelves.usd",
+        "/Isaac/Environments/Simple_Warehouse/warehouse.usd",
+    ]
+    for rel in candidates:
+        hit = _probe(rel)
+        if hit: return hit
     return None
 
 def resolve_forklift_candidate():
-    """Try a few likely forklift USDs; return first that exists, else None."""
-    from isaacsim.storage.native import get_assets_root_path
-    root = (get_assets_root_path() or "").rstrip("/")
     candidates = [
         "/Isaac/Robots/Forklift/forklift.usd",
         "/Isaac/Props/Industrial/Forklift/forklift.usd",
         "/Isaac/Environments/Warehouse/Robots/forklift.usd",
     ]
     for rel in candidates:
-        url = (root + rel) if (root and rel.startswith("/")) else rel
-        if omni_stat(url):
-            print(f"[client] forklift asset OK: {url}")
-            return url
-        else:
-            print(f"[client] forklift not found: {url}")
+        hit = _probe(rel)
+        if hit: return hit
     return None
+
+def resolve_carter_candidate():
+    candidates = [
+        "/Isaac/Robots/Carter/carter_v1.usd",
+        "/Isaac/Robots/Carter/carter.usd",
+    ]
+    for rel in candidates:
+        hit = _probe(rel)
+        if hit: return hit
+    return None
+
 
 
 
@@ -74,6 +173,26 @@ def main():
     env_url = cfg.env_usd or resolve_env_candidate()
     if env_url:
         sim.set_environment(env_url, prim_path=cfg.env_prim_path)
+        # --- forklift preferred; carter fallback ---
+        fk_url = resolve_forklift_candidate()
+        if fk_url:
+            cx, cy = float(sim.scene_center[0]), float(sim.scene_center[1])
+            fk_xyz_yaw = (cx - 2.0, cy - 1.0, 0.15, 0.0)
+            sim.add_robot("fork1", fk_url, "/World/Robots/Forklift1", xyz_yaw=fk_xyz_yaw, enable_contacts=True)
+            sim.set_cmd("fork1", lin_vel=0.4, ang_vel=0.0, timestamp=sim.t_sim)
+            print("[client] forklift added + commanded")
+        else:
+            print("[client] forklift not found; trying Carter fallback…")
+            carter_url = resolve_carter_candidate()
+            if carter_url:
+                cx, cy = float(sim.scene_center[0]), float(sim.scene_center[1])
+                carter_xyz_yaw = (cx - 2.0, cy - 1.0, 0.0, 0.0)
+                sim.add_robot("carter1", carter_url, "/World/CarterV1", xyz_yaw=carter_xyz_yaw, enable_contacts=True)
+                sim.set_cmd("carter1", lin_vel=0.6, ang_vel=0.0, timestamp=sim.t_sim)
+                print("[client] carter fallback added + commanded")
+            else:
+                print("[client] neither forklift nor carter available; environment-only.")
+
     else:
         print("[client] WARNING: could not resolve a warehouse USD; continuing with empty world")
 
