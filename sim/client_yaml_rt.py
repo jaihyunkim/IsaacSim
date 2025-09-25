@@ -25,7 +25,6 @@ def omni_stat(url: str):
         return False
 
 def _asset_root():
-    """Return Isaac assets root (string) or '' if unknown."""
     try:
         from isaacsim.storage.native import get_assets_root_path
         root = (get_assets_root_path() or "").rstrip("/")
@@ -37,26 +36,18 @@ def _asset_root():
     return ""
 
 def _join_asset(root: str, spec: str) -> str:
-    """
-    Join 'spec' to 'root' correctly.
-    - If spec starts with omniverse:// or http(s):// -> return as-is
-    - If root already ends with /Isaac or /Isaac/<ver>, strip the leading '/Isaac' from spec
-    - Allow specs relative to the Isaac root (e.g., '/Robots/Forklift/forklift.usd')
-    """
+    # If spec is a full URL, use it as-is
     if spec.startswith(("omniverse://", "http://", "https://")):
         return spec
     if not root:
-        return spec  # hope it's absolute like /Isaac/...
-    # Normalize root
-    r = root.rstrip("/")
+        return spec  # hope it’s an absolute virtual path like /Isaac/...
+    # root is typically .../Assets/Isaac/4.5 (already at /Isaac)
     s = spec
     if s.startswith("/Isaac/"):
-        # strip the leading "/Isaac" because root already points at .../Isaac[/4.5]
-        s = s[len("/Isaac"):]
-    return r + s  # s begins with '/' now
+        s = s[len("/Isaac"):]  # strip duplicate /Isaac
+    return root.rstrip("/") + s  # s begins with '/...'
 
 def _probe(spec: str):
-    """Try root+spec, and also try spec as-is. Return first hit or None."""
     import omni.client
     root = _asset_root()
     for url in (_join_asset(root, spec), spec):
@@ -71,6 +62,7 @@ def _probe(spec: str):
             print(f"[client] stat failed for {url}: {e}")
     return None
 
+
 def resolve_env_candidate():
     # richer shelves first, then simple warehouse
     candidates = [
@@ -84,12 +76,20 @@ def resolve_env_candidate():
         if hit: return hit
     return None
 
+
 def resolve_forklift_candidate():
+    # Allow an explicit override from the environment (absolute URL or path)
+    env = os.getenv("ROBOT_FORKLIFT_URL")
+    if env:
+        hit = _probe(env)
+        if hit: return hit
+
+    # Otherwise try known relative locations under your Isaac root
     candidates = [
         "/Robots/Forklift/forklift.usd",
         "/Props/Industrial/Forklift/forklift.usd",
         "/Environments/Warehouse/Robots/forklift.usd",
-        # absolute fallbacks if your root is blank:
+        # absolute fallbacks if your root is empty:
         "/Isaac/Robots/Forklift/forklift.usd",
         "/Isaac/Props/Industrial/Forklift/forklift.usd",
     ]
@@ -99,18 +99,22 @@ def resolve_forklift_candidate():
     return None
 
 def resolve_carter_candidate():
+    env = os.getenv("ROBOT_CARTER_URL")
+    if env:
+        hit = _probe(env)
+        if hit: return hit
+
     candidates = [
         "/Robots/Carter/carter_v1.usd",
         "/Robots/Carter/carter.usd",
-        "/Isaac/Robots/Carter/carter_v1.usd",  # absolute fallback
+        "/Robots/Jetbot/jetbot.usd",
+        "/Robots/Clearpath/Jackal/jackal.usd",
+        "/Isaac/Robots/Carter/carter_v1.usd",
     ]
     for rel in candidates:
         hit = _probe(rel)
         if hit: return hit
     return None
-
-
-
 
 
 def main():
