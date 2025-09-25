@@ -22,12 +22,10 @@ services:
       - "${PUB_PORT:-5556}:5556"
       - "${REP_PORT:-5557}:5557"
     volumes:
-      - isaac_ws:/workspace_ws
-      - isaac_out:/out
-
-volumes:
-  isaac_ws:
-    # static key; dynamic actual name
-    name: "isaac_ws_${USER:-unknown}"
-  isaac_out:
-    name: "isaac_out_${USER:-unknown}"
+      # per-user directories from your home
+      - type: bind
+        source: /home/${USER}/isaac_ws
+        target: /workspace_ws
+      - type: bind
+        source: /home/${USER}/isaac_out
+        target: /out
