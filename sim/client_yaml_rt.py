@@ -24,39 +24,42 @@ def omni_stat(url: str):
     except Exception:
         return False
 
-def _asset_roots():
-    """Return a list of candidate root prefixes to try for USDs."""
-    roots = []
+def _asset_root():
+    """Return Isaac assets root (string) or '' if unknown."""
     try:
         from isaacsim.storage.native import get_assets_root_path
-        r = (get_assets_root_path() or "").rstrip("/")
-        if r:
-            roots.append(r)
-    except Exception:
-        pass
-    # Common local Nucleus prefixes (adjust for your lab if needed)
-    roots += [
-        "omniverse://localhost/NVIDIA/Assets/Isaac/4.5",
-        "omniverse://localhost/NVIDIA/Assets/Isaac",
-        "omniverse://127.0.0.1/NVIDIA/Assets/Isaac/4.5",
-        "",  # allow absolute /Isaac/... to pass through
-    ]
-    # Dedup while preserving order
-    out = []
-    seen = set()
-    for x in roots:
-        if x not in seen and x is not None:
-            seen.add(x); out.append(x)
-    return out
+        root = (get_assets_root_path() or "").rstrip("/")
+        if root:
+            print(f"[client] ASSETS_ROOT={root}")
+            return root
+    except Exception as e:
+        print("[client] get_assets_root_path failed:", e)
+    return ""
 
-def _probe(rel_or_abs):
-    """Try to stat the asset across candidate roots; return the first URL that exists, else None."""
-    try:
-        import omni.client
-    except Exception:
-        return None
-    for root in _asset_roots():
-        url = rel_or_abs if rel_or_abs.startswith(("omniverse://","/Isaac/")) or not root else (root.rstrip("/") + rel_or_abs)
+def _join_asset(root: str, spec: str) -> str:
+    """
+    Join 'spec' to 'root' correctly.
+    - If spec starts with omniverse:// or http(s):// -> return as-is
+    - If root already ends with /Isaac or /Isaac/<ver>, strip the leading '/Isaac' from spec
+    - Allow specs relative to the Isaac root (e.g., '/Robots/Forklift/forklift.usd')
+    """
+    if spec.startswith(("omniverse://", "http://", "https://")):
+        return spec
+    if not root:
+        return spec  # hope it's absolute like /Isaac/...
+    # Normalize root
+    r = root.rstrip("/")
+    s = spec
+    if s.startswith("/Isaac/"):
+        # strip the leading "/Isaac" because root already points at .../Isaac[/4.5]
+        s = s[len("/Isaac"):]
+    return r + s  # s begins with '/' now
+
+def _probe(spec: str):
+    """Try root+spec, and also try spec as-is. Return first hit or None."""
+    import omni.client
+    root = _asset_root()
+    for url in (_join_asset(root, spec), spec):
         try:
             res, _ = omni.client.stat(url)
             if res == omni.client.Result.OK:
@@ -69,69 +72,12 @@ def _probe(rel_or_abs):
     return None
 
 def resolve_env_candidate():
-    # Try richer warehouses first, then the simple one
+    # richer shelves first, then simple warehouse
     candidates = [
-        "/Isaac/Environments/Warehouse/warehouse.usd",
-        "/Isaac/Environments/Warehouse_Shelves/warehouse_shelves.usd",
-        "/Isaac/Environments/Simple_Warehouse/warehouse_with_shelves.usd",
-        "/Isaac/Environments/Simple_Warehouse/warehouse.usd",
-    ]
-    for rel in candidates:
-        hit = _probe(rel)
-        if hit: return hit
-    return None
-
-def _asset_roots():
-    """Return a list of candidate root prefixes to try for USDs."""
-    roots = []
-    try:
-        from isaacsim.storage.native import get_assets_root_path
-        r = (get_assets_root_path() or "").rstrip("/")
-        if r:
-            roots.append(r)
-    except Exception:
-        pass
-    # Common local Nucleus prefixes (adjust for your lab if needed)
-    roots += [
-        "omniverse://localhost/NVIDIA/Assets/Isaac/4.5",
-        "omniverse://localhost/NVIDIA/Assets/Isaac",
-        "omniverse://127.0.0.1/NVIDIA/Assets/Isaac/4.5",
-        "",  # allow absolute /Isaac/... to pass through
-    ]
-    # Dedup while preserving order
-    out = []
-    seen = set()
-    for x in roots:
-        if x not in seen and x is not None:
-            seen.add(x); out.append(x)
-    return out
-
-def _probe(rel_or_abs):
-    """Try to stat the asset across candidate roots; return the first URL that exists, else None."""
-    try:
-        import omni.client
-    except Exception:
-        return None
-    for root in _asset_roots():
-        url = rel_or_abs if rel_or_abs.startswith(("omniverse://","/Isaac/")) or not root else (root.rstrip("/") + rel_or_abs)
-        try:
-            res, _ = omni.client.stat(url)
-            if res == omni.client.Result.OK:
-                print(f"[client] asset OK: {url}")
-                return url
-            else:
-                print(f"[client] not found: {url}")
-        except Exception as e:
-            print(f"[client] stat failed for {url}: {e}")
-    return None
-
-def resolve_env_candidate():
-    # Try richer warehouses first, then the simple one
-    candidates = [
-        "/Isaac/Environments/Warehouse/warehouse.usd",
-        "/Isaac/Environments/Warehouse_Shelves/warehouse_shelves.usd",
-        "/Isaac/Environments/Simple_Warehouse/warehouse_with_shelves.usd",
-        "/Isaac/Environments/Simple_Warehouse/warehouse.usd",
+        "/Environments/Warehouse/warehouse.usd",
+        "/Environments/Warehouse_Shelves/warehouse_shelves.usd",
+        "/Environments/Simple_Warehouse/warehouse_with_shelves.usd",
+        "/Environments/Simple_Warehouse/warehouse.usd",
     ]
     for rel in candidates:
         hit = _probe(rel)
@@ -140,9 +86,12 @@ def resolve_env_candidate():
 
 def resolve_forklift_candidate():
     candidates = [
+        "/Robots/Forklift/forklift.usd",
+        "/Props/Industrial/Forklift/forklift.usd",
+        "/Environments/Warehouse/Robots/forklift.usd",
+        # absolute fallbacks if your root is blank:
         "/Isaac/Robots/Forklift/forklift.usd",
         "/Isaac/Props/Industrial/Forklift/forklift.usd",
-        "/Isaac/Environments/Warehouse/Robots/forklift.usd",
     ]
     for rel in candidates:
         hit = _probe(rel)
@@ -151,13 +100,15 @@ def resolve_forklift_candidate():
 
 def resolve_carter_candidate():
     candidates = [
-        "/Isaac/Robots/Carter/carter_v1.usd",
-        "/Isaac/Robots/Carter/carter.usd",
+        "/Robots/Carter/carter_v1.usd",
+        "/Robots/Carter/carter.usd",
+        "/Isaac/Robots/Carter/carter_v1.usd",  # absolute fallback
     ]
     for rel in candidates:
         hit = _probe(rel)
         if hit: return hit
     return None
+
 
 
 
